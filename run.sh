@@ -10,7 +10,7 @@ if [[ "$OS" == "Linux" ]]; then
     -L /home/sujith/gitshit/raylib-5.0_linux_amd64/lib \
     -I /home/sujith/gitshit/raylib-5.0_linux_amd64/include \
     -lraylib -lm \
-    && ./asteroids
+    # && ./asteroids
 
 elif [[ "$OS" == "Darwin" ]]; then
     echo "Building for macOS..."

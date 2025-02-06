@@ -1,3 +1,17 @@
+#if 0
+		    if(bulletArray[i].pos.y > SCREEN_HEIGHT){
+			bulletArray[i].pos.y = 0;
+		    }
+		    if(bulletArray[i].pos.x > SCREEN_WIDTH){
+			bulletArray[i].pos.x = 0;
+		    }
+		    if(bulletArray[i].pos.x < 0){
+			bulletArray[i].pos.x = SCREEN_WIDTH;
+		    }
+		    if(bulletArray[i].pos.y < 0){
+			bulletArray[i].pos.y = SCREEN_HEIGHT;
+		    }
+#endif
 #include <raylib.h>
 #include <assert.h>
 #include <math.h>
@@ -8,7 +22,9 @@
 #define SCREEN_WIDTH 600
 #define SCREEN_HEIGHT 600
 #define TILE_SIZE 40
-#define MEGABYTE 1024 * 1024
+#define MAX_BULLETS 10
+#define BULLET_SIZE 4
+
 
 typedef struct Arena{
     void* memory;
@@ -30,7 +46,7 @@ void* arena_alloc(Arena* arena, size_t size){
     if(arena->used + size > arena->capacity){
 	arena->used = 0;
     }
-    void* ptr =  arena->memory + arena->used;
+    void* ptr =  (char*)arena->memory + arena->used;
     arena->used += size;
     return ptr;
 }
@@ -50,41 +66,34 @@ typedef struct player{
     Vector2 ver3;
 } player;
 
-typedef struct entity{
+typedef struct bullet{
     Vector2 pos;
     Vector2 vec;
     float speed;
-} entity;
+    float ttl;
+} bullet;
 
-entity* shootBullet(Arena* arena,player* p, float theta){
-    entity* bullet = arena_alloc(arena, sizeof(entity));
-    bullet->pos = (Vector2){.x = p->ver1.x, .y = p->ver1.y };
-    bullet->vec = (Vector2){.x = sin(PI/2 - theta), .y = cos(PI/2 - theta)};
-    bullet->speed = 0.1;
-    return bullet;
-}
-
-void movDir(player* p, Direction d, float scale){
+void movDir(player* p, Direction d, float scale, float dT){
     switch (d) {
 	case W:
-	    p->ver1.y -= scale;
-	    p->ver2.y -= scale;
-	    p->ver3.y -= scale;
+	    p->ver1.y -= scale * dT;
+	    p->ver2.y -= scale * dT;
+	    p->ver3.y -= scale * dT;
 	    break;
 	case A:
-	    p->ver1.x -= scale;
-	    p->ver2.x -= scale;
-	    p->ver3.x -= scale;
+	    p->ver1.x -= scale * dT;
+	    p->ver2.x -= scale * dT;
+	    p->ver3.x -= scale * dT;
 	    break;
 	case S:
-	    p->ver1.y += scale;
-	    p->ver2.y += scale;
-	    p->ver3.y += scale;
+	    p->ver1.y += scale * dT;
+	    p->ver2.y += scale * dT;
+	    p->ver3.y += scale * dT;
 	    break;
 	case D:
-	    p->ver1.x += scale;
-	    p->ver2.x += scale;
-	    p->ver3.x += scale;
+	    p->ver1.x += scale * dT;
+	    p->ver2.x += scale * dT;
+	    p->ver3.x += scale * dT;
 	    break;
 	default:
 	    assert("Not a correct direction");
@@ -106,61 +115,100 @@ void DrawPlayer(Vector2* mousePos, player* p1, float theta){
 }
 
 int main(void){
-    float speed = 0.1;
+    float speed = 350;
     player p1 = {.ver1 = {.x = 300, .y = 300},
 	.ver2 = {.x = 300 - 0.5 * TILE_SIZE, .y = 300 + 0.86602540378 * TILE_SIZE},
 	.ver3 = {.x = 300 + 0.5 * TILE_SIZE, .y = 300 + 0.86602540378 * TILE_SIZE}
     };
     float bulletTicker = 0;
-    int bulletCounter = 0;
-    entity* bulletArray;
-    Arena bullet_arena = arena_init(MEGABYTE * sizeof(entity));
+    int addCounter = 0;
+    int subCounter = 0;
+    bullet* bulletArray;
+    Arena bulletArena = arena_init(MAX_BULLETS * sizeof(bullet));
+    float dT = 0;
 
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Init Window");
     while(!WindowShouldClose()){
 	BeginDrawing(); 
 	ClearBackground(BLACK);
-	bulletTicker += GetFrameTime();
+	dT = GetFrameTime();
+	bulletTicker += dT;
 	Vector2 mousePos = GetMousePosition();
 	float theta = atan2f((mousePos.y - p1.ver1.y), (mousePos.x - p1.ver1.x));
 
 	if(IsKeyDown(KEY_W)) {
-	    movDir(&p1, W, speed);
+	    movDir(&p1, W, speed, dT);
 	}
 	if(IsKeyDown(KEY_A)) {
-	    movDir(&p1, A, speed);
+	    movDir(&p1, A, speed, dT);
 	}
 	if(IsKeyDown(KEY_S)) {
-	    movDir(&p1, S, speed);
+	    movDir(&p1, S, speed, dT);
 	}
 	if(IsKeyDown(KEY_D)) {
-	    movDir(&p1, D, speed);
+	    movDir(&p1, D, speed, dT);
 	}
 	if(IsMouseButtonDown(MOUSE_BUTTON_LEFT)){
-	    while(bulletTicker > 0.1){
-		if(bulletCounter >= MEGABYTE / sizeof(entity)){
-		    bulletCounter = 0;
-		    printf("exceeded\n");
+	    if(bulletTicker > 0.1){
+		if(addCounter >= MAX_BULLETS){
+		    addCounter = 0;
 		}
 		bulletTicker = 0;
-		shootBullet(&bullet_arena, &p1, theta);
-		bulletCounter++;
+		bullet* newbullet = arena_alloc(&bulletArena, sizeof(bullet));
+		newbullet->pos = (Vector2){.x = p1.ver1.x - BULLET_SIZE / 2, .y = p1.ver1.y - BULLET_SIZE / 2};
+		newbullet->vec = (Vector2){.x = cosf(theta), .y = sinf(theta)};
+		newbullet->speed = 700;
+		newbullet->ttl = 1;
+		addCounter++;
+		bulletArray = bulletArena.memory;
+		if(addCounter > MAX_BULLETS) addCounter = 0;
 	    }
-	    bulletArray = bullet_arena.memory;
-	    printf("bullet: %d\n", bulletCounter);
 	}
 
-	if(bulletCounter > 0){
-	    for(size_t i = 0; i < bulletCounter; i++){
-		bulletArray[i].pos.x += bulletArray[i].vec.x * bulletArray[i].speed;
-		bulletArray[i].pos.y += bulletArray[i].vec.y * bulletArray[i].speed;
-		DrawRectangleV(bulletArray[i].pos, (Vector2){.x = 5, .y = 5}, WHITE);
+	printf("dishum\n");
+
+	if(addCounter > 0){
+	    if(addCounter < subCounter){
+		for(size_t i = subCounter; i < MAX_BULLETS; i++){
+		    bulletArray[i].ttl -= dT;
+		    if(bulletArray[i].ttl < 0){
+			subCounter = i+1;
+			continue; // lol claude
+		    }
+		    bulletArray[i].pos.x += bulletArray[i].vec.x * bulletArray[i].speed * dT;
+		    bulletArray[i].pos.y += bulletArray[i].vec.y * bulletArray[i].speed * dT;
+		    DrawRectangleV(bulletArray[i].pos, (Vector2){.x = BULLET_SIZE, .y = BULLET_SIZE}, WHITE);
+		    if(subCounter > MAX_BULLETS) subCounter = 0;
+		}
+		for(size_t i = 0; i < addCounter; i++){
+		    bulletArray[i].ttl -= dT;
+		    if(bulletArray[i].ttl < 0){
+			subCounter = i+1;
+		    }
+		    bulletArray[i].pos.x += bulletArray[i].vec.x * bulletArray[i].speed * dT;
+		    bulletArray[i].pos.y += bulletArray[i].vec.y * bulletArray[i].speed * dT;
+		    DrawRectangleV(bulletArray[i].pos, (Vector2){.x = BULLET_SIZE, .y = BULLET_SIZE}, WHITE);
+		}
 	    }
+	    else{
+		for(size_t i = subCounter; i < addCounter; i++){
+		    bulletArray[i].ttl -= dT;
+		    if(bulletArray[i].ttl < 0){
+			subCounter = i+1;
+			continue; // lol claude
+		    }
+		    bulletArray[i].pos.x += bulletArray[i].vec.x * bulletArray[i].speed * dT;
+		    bulletArray[i].pos.y += bulletArray[i].vec.y * bulletArray[i].speed * dT;
+		    DrawRectangleV(bulletArray[i].pos, (Vector2){.x = BULLET_SIZE, .y = BULLET_SIZE}, WHITE);
+		}
+	    }
+	    printf("%d, %d\n", addCounter, subCounter);
 	}
 
 	DrawPlayer(&mousePos, &p1, theta);
+	DrawFPS(20, 20);
 	EndDrawing();
     }
-    arena_destroy(&bullet_arena);
+    arena_destroy(&bulletArena);
     return 0;
 }
