@@ -1,17 +1,3 @@
-#if 0
-		    if(bulletArray[i].pos.y > SCREEN_HEIGHT){
-			bulletArray[i].pos.y = 0;
-		    }
-		    if(bulletArray[i].pos.x > SCREEN_WIDTH){
-			bulletArray[i].pos.x = 0;
-		    }
-		    if(bulletArray[i].pos.x < 0){
-			bulletArray[i].pos.x = SCREEN_WIDTH;
-		    }
-		    if(bulletArray[i].pos.y < 0){
-			bulletArray[i].pos.y = SCREEN_HEIGHT;
-		    }
-#endif
 #include <raylib.h>
 #include <assert.h>
 #include <math.h>
@@ -22,7 +8,6 @@
 #define SCREEN_WIDTH 600
 #define SCREEN_HEIGHT 600
 #define TILE_SIZE 40
-#define MAX_BULLETS 10
 #define BULLET_SIZE 4
 
 
@@ -73,6 +58,11 @@ typedef struct bullet{
     float ttl;
 } bullet;
 
+typedef struct bulletType{
+    int ttl;
+    float rate;
+} bulletType;
+
 void movDir(player* p, Direction d, float scale, float dT){
     switch (d) {
 	case W:
@@ -114,23 +104,43 @@ void DrawPlayer(Vector2* mousePos, player* p1, float theta){
     DrawTriangleLines(p1->ver1, p1->ver2, p1->ver3, RAYWHITE);
 }
 
+void drawBullets(bullet* b, int* subCounter, float dT, int i){
+    b->ttl -= dT;
+    if(b->ttl < 0){
+	*subCounter = i+1 ;
+    }
+    b->pos.x += b->vec.x * b->speed * dT;
+    b->pos.y += b->vec.y * b->speed * dT;
+    DrawRectangleV(b->pos, (Vector2){.x = BULLET_SIZE, .y = BULLET_SIZE}, WHITE);
+}
+
 int main(void){
     float speed = 350;
+    int maxBullets = 40;
+
     player p1 = {.ver1 = {.x = 300, .y = 300},
 	.ver2 = {.x = 300 - 0.5 * TILE_SIZE, .y = 300 + 0.86602540378 * TILE_SIZE},
 	.ver3 = {.x = 300 + 0.5 * TILE_SIZE, .y = 300 + 0.86602540378 * TILE_SIZE}
     };
+
+    bulletType newbulletType[] = { 
+	{ .ttl = 1, .rate = 1 * 0.1},
+	{ .ttl = 2, .rate = 2 * 0.1},
+	{ .ttl = 4, .rate = 3 * 0.1}
+    };
+
     float bulletTicker = 0;
     int addCounter = 0;
     int subCounter = 0;
     bullet* bulletArray;
-    Arena bulletArena = arena_init(MAX_BULLETS * sizeof(bullet));
+    Arena bulletArena = arena_init(maxBullets * sizeof(bullet));
     float dT = 0;
 
     InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Init Window");
     while(!WindowShouldClose()){
 	BeginDrawing(); 
 	ClearBackground(BLACK);
+
 	dT = GetFrameTime();
 	bulletTicker += dT;
 	Vector2 mousePos = GetMousePosition();
@@ -148,9 +158,10 @@ int main(void){
 	if(IsKeyDown(KEY_D)) {
 	    movDir(&p1, D, speed, dT);
 	}
+
 	if(IsMouseButtonDown(MOUSE_BUTTON_LEFT)){
-	    if(bulletTicker > 0.1){
-		if(addCounter >= MAX_BULLETS){
+	    if(bulletTicker > newbulletType[1].rate){
+		if(addCounter >= maxBullets){
 		    addCounter = 0;
 		}
 		bulletTicker = 0;
@@ -158,52 +169,44 @@ int main(void){
 		newbullet->pos = (Vector2){.x = p1.ver1.x - BULLET_SIZE / 2, .y = p1.ver1.y - BULLET_SIZE / 2};
 		newbullet->vec = (Vector2){.x = cosf(theta), .y = sinf(theta)};
 		newbullet->speed = 700;
-		newbullet->ttl = 1;
+		newbullet->ttl = newbulletType[2].ttl;
 		addCounter++;
 		bulletArray = bulletArena.memory;
-		if(addCounter > MAX_BULLETS) addCounter = 0;
+		if(addCounter > maxBullets) addCounter = 0;
 	    }
 	}
 
-	printf("dishum\n");
-
 	if(addCounter > 0){
+#if 0
+	    if(bulletArray[i].pos.y > SCREEN_HEIGHT){
+		bulletArray[i].pos.y = 0;
+	    }
+	    if(bulletArray[i].pos.x > SCREEN_WIDTH){
+		bulletArray[i].pos.x = 0;
+	    }
+	    if(bulletArray[i].pos.x < 0){
+		bulletArray[i].pos.x = SCREEN_WIDTH;
+	    }
+	    if(bulletArray[i].pos.y < 0){
+		bulletArray[i].pos.y = SCREEN_HEIGHT;
+	    }
+#endif
 	    if(addCounter < subCounter){
-		for(size_t i = subCounter; i < MAX_BULLETS; i++){
-		    bulletArray[i].ttl -= dT;
-		    if(bulletArray[i].ttl < 0){
-			subCounter = i+1;
-			continue; // lol claude
-		    }
-		    bulletArray[i].pos.x += bulletArray[i].vec.x * bulletArray[i].speed * dT;
-		    bulletArray[i].pos.y += bulletArray[i].vec.y * bulletArray[i].speed * dT;
-		    DrawRectangleV(bulletArray[i].pos, (Vector2){.x = BULLET_SIZE, .y = BULLET_SIZE}, WHITE);
-		    if(subCounter > MAX_BULLETS) subCounter = 0;
+		for(size_t i = subCounter; i < maxBullets; i++){
+		    drawBullets(&bulletArray[i], &subCounter, dT, i);
+		    if(subCounter > maxBullets) subCounter = 0;
 		}
 		for(size_t i = 0; i < addCounter; i++){
-		    bulletArray[i].ttl -= dT;
-		    if(bulletArray[i].ttl < 0){
-			subCounter = i+1;
-		    }
-		    bulletArray[i].pos.x += bulletArray[i].vec.x * bulletArray[i].speed * dT;
-		    bulletArray[i].pos.y += bulletArray[i].vec.y * bulletArray[i].speed * dT;
-		    DrawRectangleV(bulletArray[i].pos, (Vector2){.x = BULLET_SIZE, .y = BULLET_SIZE}, WHITE);
+		    drawBullets(&bulletArray[i], &subCounter, dT, i);
 		}
 	    }
 	    else{
 		for(size_t i = subCounter; i < addCounter; i++){
-		    bulletArray[i].ttl -= dT;
-		    if(bulletArray[i].ttl < 0){
-			subCounter = i+1;
-			continue; // lol claude
-		    }
-		    bulletArray[i].pos.x += bulletArray[i].vec.x * bulletArray[i].speed * dT;
-		    bulletArray[i].pos.y += bulletArray[i].vec.y * bulletArray[i].speed * dT;
-		    DrawRectangleV(bulletArray[i].pos, (Vector2){.x = BULLET_SIZE, .y = BULLET_SIZE}, WHITE);
+		    drawBullets(&bulletArray[i], &subCounter, dT, i);
 		}
 	    }
-	    printf("%d, %d\n", addCounter, subCounter);
 	}
+	printf("%d, %d\n", addCounter, subCounter);
 
 	DrawPlayer(&mousePos, &p1, theta);
 	DrawFPS(20, 20);
